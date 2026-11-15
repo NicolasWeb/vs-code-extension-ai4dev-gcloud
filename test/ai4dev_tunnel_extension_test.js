@@ -18,6 +18,9 @@ const processInvocations = [];
 let authenticationPrefillEnabled = true;
 let serviceState = "inactive";
 let failStatusProbe = false;
+let failAction = false;
+let acknowledgePresentation = true;
+let presentationLeaseSeconds = 150;
 let statusCause = "auth";
 // authFieldState mirrors the eleventh tab field of the ai4dev status line, the access state the
 // CLI reports for the gcloud authorization; the product parses that field in src/status.js.
@@ -36,7 +39,7 @@ Module._load = function load(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const ACTIONS = ['status', 'connect', 'disconnect', 'restart', 'logs', 'renew', 'prefill-set'];
+const ACTIONS = ['status', 'connect', 'disconnect', 'restart', 'logs', 'renew', 'renew-background', 'prefill-set', 'presence', 'presence-close'];
 
 // A notification button runs its action without being awaited by the product, so a phase that
 // clicks one must give the host its turns back. Bounded: a missing effect is a failure, not a hang.
@@ -60,7 +63,7 @@ childProcess.spawn = (command, args) => {
   // token itself is the stable locator, a negative index is not.
   const action = ACTIONS.find((name) => args.includes(name));
   process.nextTick(() => {
-    if (action === "status") {
+    if (action === "status" || action === "presence") {
       if (failStatusProbe) {
         child.stderr.end("simulated transport failure\n");
         setImmediate(() => child.emit("close", 65));
@@ -68,12 +71,21 @@ childProcess.spawn = (command, args) => {
       }
       const listening = serviceState === "active" ? "1" : "0";
       const prefillState = authenticationPrefillEnabled ? "true" : "false";
-      child.stdout.end(
+      const owner = args.find((value) => value.startsWith("AI4DEV_PRESENTATION_ID="));
+      const lease = acknowledgePresentation && owner && args.includes("AI4DEV_PRESENTATION_FOCUSED=1")
+        ? `AI4DEV_PRESENTATION_OWNER id=${owner.split("=")[1]} expires=${Math.floor(Date.now() / 1000) + presentationLeaseSeconds}\n`
+        : "";
+      child.stdout.end(lease + (
+        action === "presence" ? "" :
         [
           "AI4DEV_TUNNEL_STATUS", "systemd", serviceState, "7000", listening,
           "1", "00:00", "5", "06:00", "Europe/Paris", prefillState, authFieldState,
         ].join("\t") + "\n"
-      );
+      ));
+    } else if (failAction) {
+      child.stderr.end("simulated action failure\n");
+      setImmediate(() => child.emit("close", 1));
+      return child;
     } else if (action === "prefill-set") {
       authenticationPrefillEnabled = args.at(-1) === "true";
       child.stdout.end("Authentication prompt prefill updated.\n");
@@ -121,6 +133,19 @@ async function runUpdatable(hostContext) {
     processInvocations.length > beforeButtonClick,
     "the first button runs a tunnel action through the client"
   );
+  const beforeFailedClick = notifications.length;
+  const beforeSilentInfo = infoMessages.length;
+  failAction = true;
+  failStatusProbe = true;
+  await authNotice.options.buttons[0].click();
+  failAction = false;
+  failStatusProbe = false;
+  assert.equal(notifications.length, beforeFailedClick + 1,
+    "action and follow-up status errors are consolidated into one new notification");
+  assert.ok(notifications.at(-1).message.includes("\n"),
+    "the consolidated notification retains both safe error descriptions");
+  assert.equal(infoMessages.length, beforeSilentInfo,
+    "a notification action never shows an additional success dialog");
 
   // The same failure read again refreshes that notification instead of stacking a second one.
   await registeredCommands.get("ai4devTunnel.showStatus")();
@@ -152,6 +177,15 @@ async function runUpdatable(hostContext) {
     fake.created.length <= 1,
     "one standing problem, at most one row (got " + fake.created.length + ")"
   );
+  assert.equal(fake.created.length, 1, "the changed problem offers its current actions");
+  const beforeRenewalTerminals = terminals.length;
+  const beforeRenewalActions = processInvocations.length;
+  await fake.created[0].options.buttons[1].click();
+  assert.equal(terminals.length, beforeRenewalTerminals,
+    "renewal from a notification never opens a terminal");
+  assert.ok(processInvocations.slice(beforeRenewalActions)
+    .some((call) => call.args.includes("renew-background")),
+    "the renewal button uses the bounded cached-credential operation");
   // The installed 1.142 host has no Notification class but does have `withProgress` (measured:
   // zero `NotificationButton` in its bundle). There the first announcement keeps the buttoned
   // message, and the evolution of that standing problem refreshes one channel in place.
@@ -230,6 +264,30 @@ async function runUpdatable(hostContext) {
   await channel.settled;
   assert.equal(channel.running, false, "recovery closes the status channel");
   assert.equal(fake.progressChannels.length, 1, "recovery must not open another one");
+  fakeVscode.window.state.focused = false;
+  serviceState = "inactive";
+  const beforeUnfocused = notifications.length;
+  await registeredCommands.get("ai4devTunnel.showStatus")();
+  assert.equal(notifications.length, beforeUnfocused,
+    "an unfocused window leaves mirrored failure presentation to the OS");
+  fakeVscode.window.state.focused = true;
+  await registeredCommands.get("ai4devTunnel.showStatus")();
+  assert.equal(notifications.length, beforeUnfocused + 1,
+    "a focused acknowledged owner can announce the pending failure");
+  acknowledgePresentation = false;
+  serviceState = "active";
+  await registeredCommands.get("ai4devTunnel.showStatus")();
+  serviceState = "inactive";
+  const beforeLegacy = notifications.length;
+  await registeredCommands.get("ai4devTunnel.showStatus")();
+  assert.equal(notifications.length, beforeLegacy,
+    "an installation without ownership acknowledgment retains OS presentation");
+  acknowledgePresentation = true;
+  presentationLeaseSeconds = -1;
+  await registeredCommands.get("ai4devTunnel.showStatus")();
+  assert.equal(notifications.length, beforeLegacy,
+    "an expired acknowledgment never grants IDE ownership");
+  presentationLeaseSeconds = 150;
 
   // Back to the fallback host so the phases below measure the older surface again.
   installNotificationApi(false);

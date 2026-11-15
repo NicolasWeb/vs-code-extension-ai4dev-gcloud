@@ -29,6 +29,7 @@ function createVscodeFake() {
     notificationApi: false,
     selectedAction: undefined,
     configurationChangeHandler: undefined,
+    windowStateHandler: undefined,
   };
 
   class NotificationButton {
@@ -89,6 +90,11 @@ function createVscodeFake() {
       }
     },
     window: {
+      state: { focused: true },
+      onDidChangeWindowState(handler) {
+        state.windowStateHandler = handler;
+        return { dispose() {} };
+      },
       createOutputChannel(name) {
         const channel = {
           name,

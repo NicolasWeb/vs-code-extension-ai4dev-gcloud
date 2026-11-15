@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const { spawnSync } = require("node:child_process");
 const { PassThrough } = require("node:stream");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { operationForAction } = require("../src/actions");
 const {
   SHELL_SCRIPT,
@@ -40,6 +43,20 @@ assert.deepEqual(windowsInvocation.args.slice(0, 4), ["-d", "FedoraLinux-44", "-
 assert.equal(windowsInvocation.args.at(-3), "status");
 assert.equal(windowsInvocation.args.at(-4), "~/agents/ai4dev/ai4dev_tunnel");
 assert.equal(windowsInvocation.args.at(-1), "true");
+const presenceInvocation = buildInvocation({
+  platform: "win32",
+  installPath: "/opt/ai4dev",
+  action: "status",
+  presentationId: "a".repeat(32),
+  presentationFocused: true,
+  presentationTtlSeconds: 75,
+});
+assert.ok(presenceInvocation.args.includes("AI4DEV_PRESENTATION_ID=" + "a".repeat(32)));
+assert.ok(presenceInvocation.args.includes("AI4DEV_PRESENTATION_FOCUSED=1"));
+assert.equal(presenceInvocation.args.at(-3), "status");
+assert.throws(() => buildInvocation({
+  installPath: "/opt/ai4dev", action: "status", presentationId: "../other",
+}), /Invalid presentation/);
 
 const linuxInvocation = buildInvocation({
   platform: "linux",
@@ -48,6 +65,41 @@ const linuxInvocation = buildInvocation({
 });
 assert.equal(linuxInvocation.command, "/bin/bash");
 assert.equal(linuxInvocation.args.at(-3), "connect");
+const backgroundRenewal = buildInvocation({
+  platform: "linux",
+  installPath: "/opt/ai4dev",
+  action: "renew-background",
+});
+assert.equal(backgroundRenewal.args.at(-3), "renew-background");
+assert.match(SHELL_SCRIPT, /auth-renew --help \| grep -Fq -- "--non-interactive"/);
+assert.match(SHELL_SCRIPT, /"\$AI4DEV_HOME\/bin\/ai4dev" auth-renew --non-interactive/);
+const renewalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ai4dev-renew-contract-"));
+try {
+  fs.mkdirSync(path.join(renewalRoot, "bashrc"));
+  fs.mkdirSync(path.join(renewalRoot, "bin"));
+  fs.writeFileSync(path.join(renewalRoot, "bashrc", "ai4dev.bashrc"),
+    "ai4dev_env() { :; }\n");
+  fs.writeFileSync(path.join(renewalRoot, "bin", "ai4dev"),
+    '#!/bin/sh\nif [ "$2" = "--help" ]; then\n' +
+    '  if [ "$HELP_SUPPORTED" = 1 ]; then echo "--non-interactive"; else echo "manual login"; fi\n' +
+    '  exit 0\nfi\nprintf "%s\\n" "$*" >> "$ACTION_LOG"\n',
+    { mode: 0o755 });
+  const actionLog = path.join(renewalRoot, "calls");
+  for (const supported of ["0", "1"]) {
+    const result = spawnSync("bash",
+      ["-c", SHELL_SCRIPT, "fixture", renewalRoot, "renew-background", "50", "true"],
+      { encoding: "utf8", env: { ...process.env, HELP_SUPPORTED: supported, ACTION_LOG: actionLog } });
+    assert.equal(result.status, supported === "1" ? 0 : 69, result.stderr);
+    if (supported === "0") {
+      assert.equal(fs.existsSync(actionLog), false,
+        "an older installation must never fall back to interactive login");
+    } else {
+      assert.equal(fs.readFileSync(actionLog, "utf8").trim(), "auth-renew --non-interactive");
+    }
+  }
+} finally {
+  fs.rmSync(renewalRoot, { recursive: true, force: true });
+}
 assert.throws(
   () =>
     buildInvocation({

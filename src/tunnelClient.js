@@ -22,10 +22,27 @@ const SHELL_SCRIPT = [
   '  if ss -tlnH "sport = :$AI4DEV_PORT" 2>/dev/null | grep -q LISTEN; then return 1; fi',
   "  return 0",
   "}",
+  "publish_presence() {",
+  '  if [ -n "${AI4DEV_PRESENTATION_ID:-}" ] && declare -F ai4dev_ide_presence >/dev/null 2>&1; then',
+  '    ai4dev_ide_presence "$AI4DEV_PRESENTATION_ID" "$AI4DEV_PRESENTATION_FOCUSED" "$AI4DEV_PRESENTATION_TTL" || return $?',
+  '    if ai4dev_ide_owns_status "$AI4DEV_PRESENTATION_ID"; then',
+  '      local lease_dir="${AI4DEV_STATE_DIR:-$AI4DEV_ETAT}/ide-presence"',
+  '      local version="" lease_focus="" expires="" extra=""',
+  '      if read -r version lease_focus expires extra <"$lease_dir/$AI4DEV_PRESENTATION_ID.lease" && [ "$version" = 1 ] && [ "$lease_focus" = 1 ] && [[ "$expires" =~ ^[1-9][0-9]{0,11}$ ]] && [ -z "$extra" ]; then',
+  '        printf "AI4DEV_PRESENTATION_OWNER id=%s expires=%s\\n" "$AI4DEV_PRESENTATION_ID" "$expires"',
+  "      fi",
+  "    fi",
+  "  fi",
+  "}",
   'case "$2" in',
   "  status)",
+  '    publish_presence || printf "%s\\n" "Presentation lease could not be updated; OS presentation remains available." >&2',
   '    if ! declare -F ai4dev_status_record >/dev/null 2>&1; then printf "%s\\n" "Tunnel status record is not supported by this installation." >&2; exit 69; fi',
   '    ai4dev_status_record',
+  "    ;;",
+  "  presence) publish_presence ;;",
+  "  presence-close)",
+  '    if declare -F ai4dev_ide_release >/dev/null 2>&1; then ai4dev_ide_release "${AI4DEV_PRESENTATION_ID:-}"; fi',
   "    ;;",
   "  connect) ai4dev_connect ;;",
   "  disconnect) stop_tunnel ;;",
@@ -45,6 +62,12 @@ const SHELL_SCRIPT = [
   "    ;;",
   '  logs) ai4dev_logs "${3:-50}" ;;',
   "  renew) ai4dev_auth_renew ;;",
+  "  renew-background)",
+  '    if ! "$AI4DEV_HOME/bin/ai4dev" auth-renew --help | grep -Fq -- "--non-interactive"; then',
+  '      printf "%s\\n" "Noninteractive renewal is not supported by this installation." >&2; exit 69',
+  "    fi",
+  '    "$AI4DEV_HOME/bin/ai4dev" auth-renew --non-interactive',
+  "    ;;",
   '  *) printf "%s\\n" "Unsupported tunnel action." >&2; exit 64 ;;',
   "esac",
 ].join("\n");
@@ -114,8 +137,11 @@ function buildInvocation(options) {
     action,
     logLines = 50,
     authenticationPromptPrefill = true,
+    presentationId,
+    presentationFocused = false,
+    presentationTtlSeconds = 75,
   } = options;
-  const allowedActions = ["status", "connect", "disconnect", "restart", "logs", "renew", "prefill-set"];
+  const allowedActions = ["status", "connect", "disconnect", "restart", "logs", "renew", "renew-background", "prefill-set", "presence", "presence-close"];
   if (!allowedActions.includes(action)) {
     throw new Error("Unsupported tunnel action.");
   }
@@ -141,16 +167,33 @@ function buildInvocation(options) {
     String(requestedLogLines),
     String(prefillSetting),
   ];
+  const presence = [];
+  if (presentationId !== undefined) {
+    if (!/^[a-f0-9]{32}$/.test(presentationId) || typeof presentationFocused !== "boolean") {
+      throw new Error("Invalid presentation lease identity or focus.");
+    }
+    const ttl = positiveInteger(presentationTtlSeconds, "refreshIntervalSeconds");
+    if (ttl > 86400) {
+      throw new Error("Presentation lease exceeds its maximum lifetime.");
+    }
+    presence.push(
+      `AI4DEV_PRESENTATION_ID=${presentationId}`,
+      `AI4DEV_PRESENTATION_FOCUSED=${presentationFocused ? "1" : "0"}`,
+      `AI4DEV_PRESENTATION_TTL=${ttl}`
+    );
+  }
   if (platform === "win32" && remoteName !== "wsl") {
     const wslArgs = [];
     if (distro) {
       wslArgs.push("-d", distro);
     }
-    wslArgs.push("--exec", "bash", ...args);
+    wslArgs.push("--exec", ...(presence.length ? ["env", ...presence] : []), "bash", ...args);
     return { command: "wsl.exe", args: wslArgs };
   }
 
-  return { command: "/bin/bash", args };
+  return presence.length
+    ? { command: "/usr/bin/env", args: [...presence, "/bin/bash", ...args] }
+    : { command: "/bin/bash", args };
 }
 
 function processError(kind, exitCode) {
@@ -229,17 +272,26 @@ function createTunnelClient(options) {
     installPath: options.installPath,
     logLines: options.logLines ?? 50,
     authenticationPromptPrefill: options.authenticationPromptPrefill ?? true,
+    presentationId: options.presentationId,
+    presentationTtlSeconds: options.presentationTtlSeconds,
   };
   const timeoutSeconds = options.timeoutSeconds ?? 60;
   const spawnImpl = options.spawnImpl || spawn;
+  const invocation = (action) => buildInvocation({
+    ...invocationOptions,
+    action,
+    presentationFocused: typeof options.presentationFocused === "function"
+      ? options.presentationFocused()
+      : (options.presentationFocused ?? false),
+  });
 
   return {
     buildInvocation(action) {
-      return buildInvocation({ ...invocationOptions, action });
+      return invocation(action);
     },
     async execute(action) {
-      const invocation = buildInvocation({ ...invocationOptions, action });
-      return runProcess(invocation.command, invocation.args, {
+      const request = invocation(action);
+      return runProcess(request.command, request.args, {
         spawnImpl,
         timeoutMs: positiveInteger(timeoutSeconds, "commandTimeoutSeconds") * 1000,
       });

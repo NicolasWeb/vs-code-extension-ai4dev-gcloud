@@ -1,6 +1,7 @@
 "use strict";
 
 const vscode = require("vscode");
+const { randomBytes } = require("node:crypto");
 const { ACTIONS, operationForAction } = require("./actions");
 const { detectLocale, operatingSystemLocales, translate } = require("./localization");
 const {
@@ -14,6 +15,7 @@ const NOTIFICATION_KEY = "ai4devTunnel.failureNotified";
 
 // The states whose meaning the failure wording covers (first announcement and in-place refresh).
 const PROBLEM_STATES = ["stopped", "degraded", "down", "unavailable", "auth_required"];
+let releasePresentation;
 
 function activate(context) {
   const output = vscode.window.createOutputChannel("AI4Dev Monitor");
@@ -34,6 +36,20 @@ function activate(context) {
   let failureNotified = Boolean(context.globalState.get(NOTIFICATION_KEY, false));
   let consecutiveUnavailable = 0;
   let recoveryAnnounced = !failureNotified;
+  let backgroundActions = 0;
+  const presentationId = randomBytes(16).toString("hex");
+  let presentationOwner = false;
+  let presentationExpiresAt = 0;
+  let presentationTtlSeconds = 75;
+  const focused = () => Boolean(vscode.window.state && vscode.window.state.focused);
+  const recordPresentation = (stdout) => {
+    const match = String(stdout || "").match(new RegExp(
+      `^AI4DEV_PRESENTATION_OWNER id=${presentationId} expires=([1-9][0-9]{0,11})\\r?$`, "m"
+    ));
+    presentationExpiresAt = match ? Number(match[1]) * 1000 : 0;
+    presentationOwner = focused() && presentationExpiresAt > Date.now() &&
+      presentationExpiresAt <= Date.now() + 86400000;
+  };
 
   const statusItem = vscode.window.createStatusBarItem(
     "ai4devTunnel.status",
@@ -59,6 +75,10 @@ function activate(context) {
       configuration.get("wslDistro", ""),
       vscode.workspace.workspaceFolders
     );
+    presentationTtlSeconds = Math.min(86400, Math.ceil(
+      3 * (Number(configuration.get("refreshIntervalSeconds", 5)) || 5) +
+      (Number(configuration.get("commandTimeoutSeconds", 60)) || 60)
+    ));
     client = createTunnelClient({
       platform: process.platform,
       remoteName: vscode.env.remoteName,
@@ -67,6 +87,9 @@ function activate(context) {
       authenticationPromptPrefill: configuration.get("authenticationPromptPrefill", true),
       timeoutSeconds: configuration.get("commandTimeoutSeconds", 60),
       logLines: configuration.get("logLines", 50),
+      presentationId,
+      presentationFocused: focused,
+      presentationTtlSeconds,
     });
   }
 
@@ -262,11 +285,16 @@ function activate(context) {
     settle();
   }
 
+  function closePresentationChannels() {
+    closeStatusChannel();
+    if (statusNotification && typeof statusNotification.dismiss === "function") {
+      statusNotification.dismiss();
+    }
+  }
+
   function notificationButton(label, action) {
     return new vscode.NotificationButton(label, {
-      callback: () => {
-        void performAction(action).catch(() => undefined);
-      },
+      callback: () => performNotificationAction(action),
     });
   }
 
@@ -315,7 +343,7 @@ function activate(context) {
       .then(async (choice) => {
         const picked = offered.find((candidate) => candidate.label === choice);
         if (picked) {
-          await performAction(picked.action);
+          await performNotificationAction(picked.action);
         }
       })
       .then(undefined, (error) => {
@@ -375,6 +403,7 @@ function activate(context) {
     refreshPromise = (async () => {
       try {
         const result = await client.execute("status");
+        recordPresentation(result.stdout);
         consecutiveUnavailable = 0;
         currentStatus = {
           // The parser classifies: a dead grant outranks the record's service state.
@@ -382,6 +411,13 @@ function activate(context) {
           checkedAt: Date.now(),
         };
       } catch (error) {
+        try {
+          const presence = await client.execute("presence");
+          recordPresentation(presence.stdout);
+        } catch {
+          // A failed transport cannot extend the last acknowledged ownership lease.
+          presentationOwner = presentationOwner && Date.now() < presentationExpiresAt;
+        }
         consecutiveUnavailable += 1;
         currentStatus = {
           state: "unavailable",
@@ -395,7 +431,11 @@ function activate(context) {
         );
       }
       renderStatus();
-      await updateFailureNotification(currentStatus.state);
+      if (backgroundActions === 0 && focused() && presentationOwner) {
+        await updateFailureNotification(currentStatus.state);
+      } else if (!focused() || !presentationOwner) {
+        closePresentationChannels();
+      }
       return currentStatus;
     })();
 
@@ -431,6 +471,40 @@ function activate(context) {
       shellArgs: invocation.args,
     });
     terminal.show(true);
+  }
+
+  async function performNotificationAction(action) {
+    const errors = [];
+    backgroundActions += 1;
+    try {
+      const operation = action === "renewAuthentication"
+        ? "renew-background"
+        : operationForAction(action);
+      try {
+        const result = await client.execute(operation);
+        if (action === "showLogs") {
+          output.append(result.stdout || text("messages.noLogs"));
+        }
+      } catch (error) {
+        errors.push(errorText(error));
+      }
+      const status = await refreshStatus();
+      if (status.state === "unavailable") {
+        errors.push(text("messages.statusUnavailable"));
+      }
+    } catch (error) {
+      errors.push(errorText(error));
+    } finally {
+      backgroundActions -= 1;
+    }
+    if (errors.length > 0) {
+      const message = text("messages.actionFailed", {
+        action: text(`actions.${action}`),
+        reason: [...new Set(errors)].join("\n"),
+      });
+      output.appendLine(message);
+      await vscode.window.showErrorMessage(message);
+    }
   }
 
   async function performAction(action) {
@@ -504,6 +578,12 @@ function activate(context) {
   }
 
   makeClient();
+  releasePresentation = () => {
+    closePresentationChannels();
+    return client.execute("presence-close").catch((error) => {
+      output.appendLine(text("output.notificationFailed", { reason: errorText(error) }));
+    });
+  };
   renderStatus();
   statusItem.show();
   actionsItem.show();
@@ -512,6 +592,20 @@ function activate(context) {
     output,
     statusItem,
     actionsItem,
+    vscode.window.onDidChangeWindowState(() => {
+      if (!focused()) {
+        closePresentationChannels();
+      }
+      void client.execute("presence").then((result) => {
+        recordPresentation(result.stdout);
+        if (focused()) {
+          return refreshStatus();
+        }
+        return undefined;
+      }).catch((error) => {
+        output.appendLine(text("output.notificationFailed", { reason: errorText(error) }));
+      });
+    }),
     vscode.commands.registerCommand("ai4devTunnel.toggle", toggleTunnel),
     vscode.commands.registerCommand("ai4devTunnel.showActions", showActions),
     vscode.commands.registerCommand("ai4devTunnel.connect", () => performAction("connect")),
@@ -566,7 +660,9 @@ function activate(context) {
   void refreshStatus();
 }
 
-function deactivate() {}
+function deactivate() {
+  return releasePresentation ? releasePresentation() : undefined;
+}
 
 module.exports = {
   activate,
