@@ -150,6 +150,50 @@ assert.throws(
   /Invalid logLines setting/
 );
 assert.equal(spawnSync("bash", ["-n", "-c", SHELL_SCRIPT]).status, 0);
+const ownershipRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ai4dev-ownership-contract-"));
+try {
+  const state = path.join(ownershipRoot, "state");
+  fs.mkdirSync(path.join(ownershipRoot, "bashrc"));
+  fs.mkdirSync(path.join(ownershipRoot, "bin"));
+  fs.writeFileSync(path.join(ownershipRoot, "bashrc", "ai4dev.bashrc"), [
+    "ai4dev_env() { :; }",
+    'ai4dev_ide_owns_status() { test -f "$AI4DEV_ETAT/owned"; }',
+    "ai4dev_ide_presence() {",
+    '  mkdir -p "$AI4DEV_ETAT/ide-presence"',
+    '  printf "1 1 %s\\n" "$(( $(date +%s) + 75 ))" > "$AI4DEV_ETAT/ide-presence/$1.lease"',
+    '  touch "$AI4DEV_ETAT/owned"',
+    "}",
+  ].join("\n"));
+  fs.writeFileSync(path.join(ownershipRoot, "bin", "ai4dev"),
+    '#!/bin/sh\nprintf "%s\\n" "$*" >> "$ACTION_LOG"\n' +
+    'if [ "$CLOSE_FAIL" = 1 ]; then exit 7; fi\n', { mode: 0o755 });
+  const actionLog = path.join(ownershipRoot, "calls");
+  const executePresence = (fail) => spawnSync("bash",
+    ["-c", SHELL_SCRIPT, "fixture", ownershipRoot, "presence", "50", "true"], {
+      encoding: "utf8",
+      env: {
+        ...process.env, AI4DEV_ETAT: state, ACTION_LOG: actionLog, CLOSE_FAIL: fail,
+        AI4DEV_PRESENTATION_ID: "a".repeat(32), AI4DEV_PRESENTATION_FOCUSED: "1",
+        AI4DEV_PRESENTATION_TTL: "75",
+      },
+    });
+  const acquired = executePresence("0");
+  assert.equal(acquired.status, 0, acquired.stderr);
+  assert.match(acquired.stdout, /AI4DEV_PRESENTATION_OWNER /);
+  const closed = "notify --close --ident statut\nnotify --close --ident auth\n";
+  assert.equal(fs.readFileSync(actionLog, "utf8"), closed);
+  assert.equal(executePresence("0").status, 0);
+  assert.equal(fs.readFileSync(actionLog, "utf8"), closed,
+    "an existing owner must not repeat native closing calls on every poll");
+  fs.unlinkSync(path.join(state, "owned"));
+  const refused = executePresence("1");
+  assert.equal(refused.status, 1);
+  assert.doesNotMatch(refused.stdout, /AI4DEV_PRESENTATION_OWNER /);
+  assert.equal(fs.existsSync(path.join(state, "owned")), false);
+  assert.match(refused.stderr, /IDE ownership was not acquired/);
+} finally {
+  fs.rmSync(ownershipRoot, { recursive: true, force: true });
+}
 // Regression: the tilde home rewrite must use substring slicing. ${VAR#~/}
 // applies tilde expansion to the pattern word and never strips "~/".
 assert.match(SHELL_SCRIPT, /AI4DEV_HOME="\$HOME\/\$\{AI4DEV_HOME:2\}"/);
