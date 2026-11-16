@@ -13,9 +13,11 @@ An unhealthy tunnel state triggers one VS Code notification per failure episode,
 
 ## Settings
 
-- `ai4devTunnel.installPath` points to the Linux installation containing `bashrc/ai4dev.bashrc`.
-- `ai4devTunnel.wslDistro` selects a WSL distribution. Leave it empty to derive the distribution from the current WSL workspace or use the WSL default.
-- `ai4devTunnel.refreshIntervalSeconds` controls the polling interval.
+- `ai4devMonitor.installPath` points to the Linux installation containing `bashrc/ai4dev.bashrc`.
+- `ai4devMonitor.wslDistro` selects a WSL distribution. Leave it empty to derive the distribution from the current WSL workspace or use the WSL default.
+- `ai4devMonitor.refreshIntervalSeconds` controls the polling interval.
+
+Run `AI4Dev Monitor: Migrate legacy settings` explicitly to move the six legacy `ai4devTunnel` settings to `ai4devMonitor` without changing values or scopes. A verified private backup precedes writes; conflicts fail visibly without overwriting the destination. Legacy settings remain readable until migration. Installation paths are never rewritten automatically.
 
 ## Language and themes
 

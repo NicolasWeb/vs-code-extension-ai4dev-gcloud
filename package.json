@@ -14,43 +14,49 @@
   "main": "./src/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:ai4devTunnel.showActions"
+    "onCommand:ai4devMonitor.showActions",
+    "onCommand:ai4devMonitor.migrateSettings"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "ai4devTunnel.showActions",
+        "command": "ai4devMonitor.showActions",
         "title": "AI4Dev Monitor",
         "category": "AI4Dev"
+      },
+      {
+        "command": "ai4devMonitor.migrateSettings",
+        "title": "Migrate legacy settings",
+        "category": "AI4Dev Monitor"
       }
     ],
     "configuration": {
       "title": "AI4Dev Monitor",
       "properties": {
-        "ai4devTunnel.installPath": {
+        "ai4devMonitor.installPath": {
           "type": "string",
           "default": "~/agents/ai4dev"
         },
-        "ai4devTunnel.authenticationPromptPrefill": {
+        "ai4devMonitor.authenticationPromptPrefill": {
           "type": "boolean",
           "default": true,
           "description": "Whether to enable authentication-renewal command prefill in the next interactive shell prompt."
         },
-        "ai4devTunnel.wslDistro": {
+        "ai4devMonitor.wslDistro": {
           "type": "string",
           "default": ""
         },
-        "ai4devTunnel.refreshIntervalSeconds": {
+        "ai4devMonitor.refreshIntervalSeconds": {
           "type": "number",
           "default": 5,
           "minimum": 1
         },
-        "ai4devTunnel.commandTimeoutSeconds": {
+        "ai4devMonitor.commandTimeoutSeconds": {
           "type": "number",
           "default": 60,
           "minimum": 1
         },
-        "ai4devTunnel.logLines": {
+        "ai4devMonitor.logLines": {
           "type": "number",
           "default": 50,
           "minimum": 1

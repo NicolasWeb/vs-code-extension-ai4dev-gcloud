@@ -13,14 +13,18 @@
 
 ## Configuration
 
-- `ai4devTunnel.installPath`: Linux path to the existing `ai4dev` installation; defaults to `~/agents/ai4dev`. An explicitly configured path remains authoritative and is not rewritten automatically.
-- `ai4devTunnel.authenticationPromptPrefill`: whether an outstanding authentication alert pre-fills `ai4dev_auth_renew` in the next interactive shell prompt; defaults to `true`, matching the tunnel default. Changing the setting synchronizes it through `ai4dev_prefill`; the extension also reapplies it before opening authentication renewal. Merely activating the extension does not overwrite an existing tunnel preference.
-- `ai4devTunnel.wslDistro`: optional WSL distribution name. When empty, the extension derives it from a WSL workspace or uses the default distribution.
-- `ai4devTunnel.refreshIntervalSeconds`: status polling interval in seconds; defaults to `5` and cannot be less than `1`.
-- `ai4devTunnel.commandTimeoutSeconds`: maximum duration of a tunnel command; defaults to `60` seconds.
-- `ai4devTunnel.logLines`: number of recent log lines shown by the extension; defaults to `50`.
+- `ai4devMonitor.installPath`: Linux path to the existing `ai4dev` installation; defaults to `~/agents/ai4dev`. An explicitly configured path remains authoritative and is not rewritten automatically.
+- `ai4devMonitor.authenticationPromptPrefill`: whether an outstanding authentication alert pre-fills `ai4dev_auth_renew` in the next interactive shell prompt; defaults to `true`, matching the tunnel default. Changing the setting synchronizes it through `ai4dev_prefill`; the extension also reapplies it before opening authentication renewal. Merely activating the extension does not overwrite an existing tunnel preference.
+- `ai4devMonitor.wslDistro`: optional WSL distribution name. When empty, the extension derives it from a WSL workspace or uses the default distribution.
+- `ai4devMonitor.refreshIntervalSeconds`: status polling interval in seconds; defaults to `5` and cannot be less than `1`.
+- `ai4devMonitor.commandTimeoutSeconds`: maximum duration of a tunnel command; defaults to `60` seconds.
+- `ai4devMonitor.logLines`: number of recent log lines shown by the extension; defaults to `50`.
 
 The extension reuses `bashrc/ai4dev.bashrc` and its tunnel commands. The status check verifies the configured supervisor and local listening port; it does not call the remote application.
+
+Command, setting and status-item identifiers use `ai4devMonitor`. Existing explicit `ai4devTunnel` settings remain readable at their original scope until the explicit `AI4Dev Monitor: Migrate legacy settings` command is run. Startup does not migrate settings or rewrite installation paths.
+
+Migration covers only the six documented settings, preserving user, workspace and each workspace-folder scope. Conflicting destination values or language overrides refuse before writes. An extension-private settings backup is persisted and read back before copying; every destination is verified before legacy keys are removed. Changed sources, failed updates or readback errors stop with an explicit failure and retain the backup for recovery; this is optimistic concurrency protection, not an atomic multi-file transaction. Repeating a completed migration changes nothing. No editor reload, extension installation, authentication or service action is performed by migration.
 
 ## Language and display
 

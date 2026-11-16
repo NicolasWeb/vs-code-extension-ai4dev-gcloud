@@ -11,7 +11,103 @@ const {
 } = require("./status");
 const { createTunnelClient, resolveDistro } = require("./tunnelClient");
 
-const NOTIFICATION_KEY = "ai4devTunnel.failureNotified";
+const NOTIFICATION_KEY = "ai4devMonitor.failureNotified";
+const LEGACY_MONITOR_SECTION = "ai4devTunnel";
+const MONITOR_SETTINGS = [
+  "installPath", "authenticationPromptPrefill", "wslDistro",
+  "refreshIntervalSeconds", "commandTimeoutSeconds", "logLines",
+];
+const sameValue = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+
+function monitorConfiguration(workspace, resource) {
+  const current = workspace.getConfiguration("ai4devMonitor", resource);
+  const legacy = workspace.getConfiguration(LEGACY_MONITOR_SECTION, resource);
+  return {
+    get(key, fallback) {
+      if (typeof current.inspect === "function" && typeof legacy.inspect === "function") {
+        const selected = current.inspect(key) || {};
+        const previous = legacy.inspect(key) || {};
+        for (const field of ["workspaceFolderLanguageValue", "workspaceLanguageValue",
+          "globalLanguageValue", "workspaceFolderValue", "workspaceValue", "globalValue"]) {
+          if (selected[field] !== undefined) return selected[field];
+          if (previous[field] !== undefined) return previous[field];
+        }
+      }
+      return current.get(key, fallback);
+    },
+  };
+}
+
+async function migrateMonitorSettings(workspace, storage, targets) {
+  const scopes = [
+    { field: "globalValue", target: targets.Global },
+    { field: "workspaceValue", target: targets.Workspace },
+    ...(workspace.workspaceFolders || []).map(({ uri }) => ({
+      field: "workspaceFolderValue", target: targets.WorkspaceFolder, resource: uri,
+    })),
+  ];
+  const records = [];
+  for (const scope of scopes) {
+    const source = workspace.getConfiguration(LEGACY_MONITOR_SECTION, scope.resource);
+    const destination = workspace.getConfiguration("ai4devMonitor", scope.resource);
+    for (const key of MONITOR_SETTINGS) {
+      const observed = source.inspect(key) || {};
+      if (["globalLanguageValue", "workspaceLanguageValue", "workspaceFolderLanguageValue"]
+        .some((field) => observed[field] !== undefined)) {
+        throw new Error("MONITOR_SETTINGS_LANGUAGE_OVERRIDE");
+      }
+      const value = observed[scope.field];
+      if (value === undefined) continue;
+      const existing = (destination.inspect(key) || {})[scope.field];
+      if (existing !== undefined && !sameValue(value, existing)) {
+        throw new Error("MONITOR_SETTINGS_CONFLICT");
+      }
+      records.push({ scope, key, value, existing, source, destination });
+    }
+  }
+  if (!records.length) return { migrated: 0 };
+  const backupKey = `ai4devMonitor.settingsBackup.${Date.now()}.${randomBytes(8).toString("hex")}`;
+  const backup = records.map(({ scope, key, value, existing }) => ({
+    target: scope.target, resource: scope.resource ? scope.resource.toString() : null,
+    key, value, existing,
+  }));
+  await storage.update(backupKey, backup);
+  if (!sameValue(storage.get(backupKey), backup)) {
+    throw new Error("MONITOR_SETTINGS_BACKUP_READBACK");
+  }
+  const read = (configuration, record) => (configuration.inspect(record.key) || {})[record.scope.field];
+  for (const record of records) {
+    if (!sameValue(read(record.source, record), record.value) ||
+      !sameValue(read(record.destination, record), record.existing)) {
+      throw new Error("MONITOR_SETTINGS_CHANGED");
+    }
+    if (record.existing === undefined) {
+      try {
+        await record.destination.update(record.key, record.value, record.scope.target);
+      } catch {
+        throw new Error("MONITOR_SETTINGS_WRITE_FAILED");
+      }
+    }
+    if (!sameValue(read(record.destination, record), record.value)) {
+      throw new Error("MONITOR_SETTINGS_DESTINATION_READBACK");
+    }
+  }
+  for (const record of records) {
+    if (!sameValue(read(record.source, record), record.value) ||
+      !sameValue(read(record.destination, record), record.value)) {
+      throw new Error("MONITOR_SETTINGS_CHANGED");
+    }
+    try {
+      await record.source.update(record.key, undefined, record.scope.target);
+    } catch {
+      throw new Error("MONITOR_SETTINGS_WRITE_FAILED");
+    }
+    if (read(record.source, record) !== undefined) {
+      throw new Error("MONITOR_SETTINGS_SOURCE_READBACK");
+    }
+  }
+  return { migrated: records.length, backupKey };
+}
 
 // The states whose meaning the failure wording covers (first announcement and in-place refresh).
 const PROBLEM_STATES = ["stopped", "degraded", "down", "unavailable", "auth_required"];
@@ -33,7 +129,9 @@ function activate(context) {
   };
   let refreshPromise;
   let refreshTimer;
-  let failureNotified = Boolean(context.globalState.get(NOTIFICATION_KEY, false));
+  let failureNotified = Boolean(context.globalState.get(
+    NOTIFICATION_KEY, context.globalState.get(`${LEGACY_MONITOR_SECTION}.failureNotified`, false)
+  ));
   let consecutiveUnavailable = 0;
   let recoveryAnnounced = !failureNotified;
   let backgroundActions = 0;
@@ -52,25 +150,25 @@ function activate(context) {
   };
 
   const statusItem = vscode.window.createStatusBarItem(
-    "ai4devTunnel.status",
+    "ai4devMonitor.status",
     vscode.StatusBarAlignment.Right,
     90
   );
   statusItem.name = "AI4Dev Monitor";
-  statusItem.command = "ai4devTunnel.toggle";
+  statusItem.command = "ai4devMonitor.toggle";
 
   const actionsItem = vscode.window.createStatusBarItem(
-    "ai4devTunnel.actions",
+    "ai4devMonitor.actions",
     vscode.StatusBarAlignment.Right,
     89
   );
   actionsItem.name = "AI4Dev Monitor actions";
   actionsItem.text = "$(ellipsis)";
   actionsItem.tooltip = text("actions.openMenu");
-  actionsItem.command = "ai4devTunnel.showActions";
+  actionsItem.command = "ai4devMonitor.showActions";
 
   function makeClient() {
-    const configuration = vscode.workspace.getConfiguration("ai4devTunnel");
+    const configuration = monitorConfiguration(vscode.workspace);
     const distro = resolveDistro(
       configuration.get("wslDistro", ""),
       vscode.workspace.workspaceFolders
@@ -509,7 +607,7 @@ function activate(context) {
 
   async function performAction(action) {
     if (action === "openSettings") {
-      await vscode.commands.executeCommand("workbench.action.openSettings", "ai4devTunnel");
+      await vscode.commands.executeCommand("workbench.action.openSettings", "ai4devMonitor");
       return;
     }
     if (action === "renewAuthentication") {
@@ -606,26 +704,44 @@ function activate(context) {
         output.appendLine(text("output.notificationFailed", { reason: errorText(error) }));
       });
     }),
-    vscode.commands.registerCommand("ai4devTunnel.toggle", toggleTunnel),
-    vscode.commands.registerCommand("ai4devTunnel.showActions", showActions),
-    vscode.commands.registerCommand("ai4devTunnel.connect", () => performAction("connect")),
-    vscode.commands.registerCommand("ai4devTunnel.disconnect", () => performAction("disconnect")),
-    vscode.commands.registerCommand("ai4devTunnel.restart", () => performAction("restart")),
-    vscode.commands.registerCommand("ai4devTunnel.showLogs", () => performAction("showLogs")),
-    vscode.commands.registerCommand("ai4devTunnel.renewAuthentication", () =>
+    vscode.commands.registerCommand("ai4devMonitor.toggle", toggleTunnel),
+    vscode.commands.registerCommand("ai4devMonitor.showActions", showActions),
+    vscode.commands.registerCommand("ai4devMonitor.migrateSettings", async () => {
+      try {
+        const result = await migrateMonitorSettings(
+          vscode.workspace, context.globalState, vscode.ConfigurationTarget
+        );
+        output.appendLine(`MONITOR_SETTINGS_MIGRATED count=${result.migrated}`);
+        return result;
+      } catch (error) {
+        const reason = /^MONITOR_SETTINGS_[A-Z_]+$/.test(error.message || "")
+          ? error.message : "MONITOR_SETTINGS_MIGRATION_FAILED";
+        output.appendLine(reason);
+        await vscode.window.showErrorMessage(text("errors.settingsMigrationFailed", { reason }));
+        return { status: "failed", reason };
+      }
+    }),
+    vscode.commands.registerCommand("ai4devMonitor.connect", () => performAction("connect")),
+    vscode.commands.registerCommand("ai4devMonitor.disconnect", () => performAction("disconnect")),
+    vscode.commands.registerCommand("ai4devMonitor.restart", () => performAction("restart")),
+    vscode.commands.registerCommand("ai4devMonitor.showLogs", () => performAction("showLogs")),
+    vscode.commands.registerCommand("ai4devMonitor.renewAuthentication", () =>
       performAction("renewAuthentication")
     ),
-    vscode.commands.registerCommand("ai4devTunnel.showStatus", () => performAction("showStatus")),
-    vscode.commands.registerCommand("ai4devTunnel.openSettings", () =>
+    vscode.commands.registerCommand("ai4devMonitor.showStatus", () => performAction("showStatus")),
+    vscode.commands.registerCommand("ai4devMonitor.openSettings", () =>
       performAction("openSettings")
     ),
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("ai4devTunnel")) {
+      if (event.affectsConfiguration("ai4devMonitor") ||
+        event.affectsConfiguration(LEGACY_MONITOR_SECTION)) {
         makeClient();
-        if (event.affectsConfiguration("ai4devTunnel.refreshIntervalSeconds")) {
+        if (event.affectsConfiguration("ai4devMonitor.refreshIntervalSeconds") ||
+          event.affectsConfiguration(`${LEGACY_MONITOR_SECTION}.refreshIntervalSeconds`)) {
           scheduleRefresh();
         }
-        if (event.affectsConfiguration("ai4devTunnel.authenticationPromptPrefill")) {
+        if (event.affectsConfiguration("ai4devMonitor.authenticationPromptPrefill") ||
+          event.affectsConfiguration(`${LEGACY_MONITOR_SECTION}.authenticationPromptPrefill`)) {
           await applyAuthenticationPrefill();
         } else {
           await refreshStatus();
@@ -645,8 +761,7 @@ function activate(context) {
 
   function scheduleRefresh() {
     clearInterval(refreshTimer);
-    const configuredInterval = Number(vscode.workspace
-      .getConfiguration("ai4devTunnel")
+    const configuredInterval = Number(monitorConfiguration(vscode.workspace)
       .get("refreshIntervalSeconds", 5));
     const intervalSeconds = Number.isFinite(configuredInterval)
       ? Math.max(1, configuredInterval)
@@ -667,4 +782,6 @@ function deactivate() {
 module.exports = {
   activate,
   deactivate,
+  migrateMonitorSettings,
+  monitorConfiguration,
 };
