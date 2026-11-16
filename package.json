@@ -2,7 +2,7 @@
   "name": "ai4dev-monitor",
   "displayName": "AI4Dev Monitor",
   "description": "Monitor and control the ai4dev tunnel from VS Code.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "nitronicolasoft",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Use the `ai4devMonitor` command and configuration namespace while reading existing explicit legacy settings until the optional, backed-up migration is requested.
+- Route mirrored status notifications through one acknowledged focused editor window, with the system notification channel retaining ownership otherwise.
+- Run notification-button actions in the background and report combined action/status errors without opening terminals or changing authentication automatically.
+- Keep the package experimental with `preview` enabled.
+
 ## 0.2.0
 
 - Renamed the published identity to `nitronicolasoft.ai4dev-monitor`: `name` is `ai4dev-monitor`, `displayName` is `AI4Dev Monitor`, and the project folder is `vs-code-extensions/home-made/ai4dev-monitor/`. The former published ids were `nitronicolasoft.a4d-watcher` and, before that, `nicolas-web-local.ai4dev-tunnel`; a renamed id is a different extension id with no in-place upgrade, so `scripts/install.ps1` now refuses with `OLD_EXTENSION_INSTALLED` while either former id is still listed on any host.
