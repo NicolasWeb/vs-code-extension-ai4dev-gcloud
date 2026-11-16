@@ -83,7 +83,7 @@ function activate(context) {
       platform: process.platform,
       remoteName: vscode.env.remoteName,
       distro,
-      installPath: configuration.get("installPath", "~/agents/ai4dev/ai4dev_tunnel"),
+      installPath: configuration.get("installPath", "~/agents/ai4dev"),
       authenticationPromptPrefill: configuration.get("authenticationPromptPrefill", true),
       timeoutSeconds: configuration.get("commandTimeoutSeconds", 60),
       logLines: configuration.get("logLines", 50),

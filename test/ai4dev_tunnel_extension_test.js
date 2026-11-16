@@ -314,8 +314,24 @@ async function run() {
   };
 
   try {
+    const explicitInstallPath = settings.installPath;
+    delete settings.installPath;
     activate(context);
     await registeredCommands.get("ai4devTunnel.showStatus")();
+    assert.ok(processInvocations.some(({ args }) => args.includes("~/agents/ai4dev")),
+      "unset installPath must dispatch to the canonical current product root");
+    assert.equal(
+      require("../package.json").contributes.configuration.properties["ai4devTunnel.installPath"].default,
+      "~/agents/ai4dev"
+    );
+    settings.installPath = explicitInstallPath;
+    await fake.configurationChangeHandler({
+      affectsConfiguration: (key) => key === "ai4devTunnel" ||
+        key === "ai4devTunnel.installPath",
+    });
+    await registeredCommands.get("ai4devTunnel.showStatus")();
+    assert.ok(processInvocations.at(-1).args.includes(explicitInstallPath),
+      "an explicit installation path must not be silently migrated");
 
     assert.equal(statusItems.length, 2);
     assert.match(statusItems[0].text, /ai4dev : arrêté/, outputChannels[0].content);

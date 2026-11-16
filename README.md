@@ -13,7 +13,7 @@
 
 ## Configuration
 
-- `ai4devTunnel.installPath`: Linux path to the existing `ai4dev_tunnel` installation; defaults to `~/agents/ai4dev/ai4dev_tunnel`.
+- `ai4devTunnel.installPath`: Linux path to the existing `ai4dev` installation; defaults to `~/agents/ai4dev`. An explicitly configured path remains authoritative and is not rewritten automatically.
 - `ai4devTunnel.authenticationPromptPrefill`: whether an outstanding authentication alert pre-fills `ai4dev_auth_renew` in the next interactive shell prompt; defaults to `true`, matching the tunnel default. Changing the setting synchronizes it through `ai4dev_prefill`; the extension also reapplies it before opening authentication renewal. Merely activating the extension does not overwrite an existing tunnel preference.
 - `ai4devTunnel.wslDistro`: optional WSL distribution name. When empty, the extension derives it from a WSL workspace or uses the default distribution.
 - `ai4devTunnel.refreshIntervalSeconds`: status polling interval in seconds; defaults to `5` and cannot be less than `1`.
