@@ -19,7 +19,7 @@ function createVscodeFake() {
     created: [],
     dismissed: [],
     settings: {
-      installPath: "~/agents/ai4dev/ai4dev_tunnel",
+      installPath: "~/repositories/nicolas/ai4dev/ai4dev-gcloud/ai4dev-gcloud-cli",
       authenticationPromptPrefill: true,
       wslDistro: "",
       refreshIntervalSeconds: 30,

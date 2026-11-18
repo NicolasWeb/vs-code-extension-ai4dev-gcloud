@@ -36,10 +36,10 @@ assert.deepEqual(Object.keys(catalogs[0]).sort(), Object.keys(catalogs[1]).sort(
 assert.deepEqual(Object.keys(catalogs[0]).sort(), Object.keys(catalogs[2]).sort());
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
 assert.equal(manifest.main, "./src/extension.js");
-assert.equal(manifest.contributes.commands[0].command, "ai4devMonitor.showActions");
+assert.equal(manifest.contributes.commands[0].command, "ai4devGcloudMonitor.showActions");
 assert.equal(manifest.engines.vscode, "^1.95.0");
 const prefillSetting =
-  manifest.contributes.configuration.properties["ai4devMonitor.authenticationPromptPrefill"];
+  manifest.contributes.configuration.properties["ai4devGcloudMonitor.authenticationPromptPrefill"];
 assert.equal(prefillSetting.type, "boolean");
 assert.equal(prefillSetting.default, true);
 assert.equal(

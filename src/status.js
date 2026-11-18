@@ -1,6 +1,6 @@
 "use strict";
 
-const STATUS_PREFIX = "AI4DEV_TUNNEL_STATUS\t";
+const STATUS_PREFIX = "AI4DEV_GCLOUD_TUNNEL_STATUS\t";
 const SERVICE_WINDOW_FIELDS = 5;
 // The credential states the shell library answers; "unsupported" means an older emitter.
 const CREDENTIAL_STATES = ["valid", "renewable", "reauth_required", "unknown", "unsupported"];

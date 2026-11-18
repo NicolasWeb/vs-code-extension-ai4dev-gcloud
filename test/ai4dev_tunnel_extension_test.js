@@ -22,7 +22,7 @@ let failAction = false;
 let acknowledgePresentation = true;
 let presentationLeaseSeconds = 150;
 let statusCause = "auth";
-// authFieldState mirrors the eleventh tab field of the ai4dev status line, the access state the
+// authFieldState mirrors the eleventh tab field of the ai4dev-gcloud status line, the access state the
 // CLI reports for the gcloud authorization; the product parses that field in src/status.js.
 let authFieldState = "unsupported";
 let statusDetail = "";
@@ -71,14 +71,14 @@ childProcess.spawn = (command, args) => {
       }
       const listening = serviceState === "active" ? "1" : "0";
       const prefillState = authenticationPrefillEnabled ? "true" : "false";
-      const owner = args.find((value) => value.startsWith("AI4DEV_PRESENTATION_ID="));
-      const lease = acknowledgePresentation && owner && args.includes("AI4DEV_PRESENTATION_FOCUSED=1")
-        ? `AI4DEV_PRESENTATION_OWNER id=${owner.split("=")[1]} expires=${Math.floor(Date.now() / 1000) + presentationLeaseSeconds}\n`
+      const owner = args.find((value) => value.startsWith("AI4DEV_GCLOUD_PRESENTATION_ID="));
+      const lease = acknowledgePresentation && owner && args.includes("AI4DEV_GCLOUD_PRESENTATION_FOCUSED=1")
+        ? `AI4DEV_GCLOUD_PRESENTATION_OWNER id=${owner.split("=")[1]} expires=${Math.floor(Date.now() / 1000) + presentationLeaseSeconds}\n`
         : "";
       child.stdout.end(lease + (
         action === "presence" ? "" :
         [
-          "AI4DEV_TUNNEL_STATUS", "systemd", serviceState, "7000", listening,
+          "AI4DEV_GCLOUD_TUNNEL_STATUS", "systemd", serviceState, "7000", listening,
           "1", "00:00", "5", "06:00", "Europe/Paris", prefillState, authFieldState,
         ].join("\t") + "\n"
       ));
@@ -116,7 +116,7 @@ async function runUpdatable(hostContext) {
   const errorBefore = notifications.length;
   const infoBefore = infoMessages.length;
 
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(notifications.length, errorBefore, "no showErrorMessage call once the API exists");
   assert.equal(fake.created.length, 1, "the failure opens exactly one notification");
   const authNotice = fake.created[0];
@@ -148,7 +148,7 @@ async function runUpdatable(hostContext) {
     "a notification action never shows an additional success dialog");
 
   // The same failure read again refreshes that notification instead of stacking a second one.
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(fake.created.length, 1, "the same reading must not open a second notification");
   assert.equal(authNotice.updates.length >= 1, true, "the live row was updated, not replaced");
 
@@ -172,7 +172,7 @@ async function runUpdatable(hostContext) {
   authFieldState = "valid";
   statusDetail = "";
   fake.created.length = 0;
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.ok(
     fake.created.length <= 1,
     "one standing problem, at most one row (got " + fake.created.length + ")"
@@ -192,7 +192,7 @@ async function runUpdatable(hostContext) {
   installNotificationApi(false);
   // The product instance was activated by `run` and is not re-activated here, so the persisted
   // "already notified" flag must be cleared for this phase to measure a first announcement.
-  await hostContext.globalState.update("ai4devMonitor.failureNotified", false);
+  await hostContext.globalState.update("ai4devGcloudMonitor.failureNotified", false);
   fake.progressChannels.length = 0;
   delete require.cache[require.resolve("../src/extension")];
   delete require.cache[require.resolve("../src/tunnelClient")];
@@ -204,7 +204,7 @@ async function runUpdatable(hostContext) {
   statusDetail = "";
 
   const announced = notifications.length;
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(
     notifications.length,
     announced + 1,
@@ -217,7 +217,7 @@ async function runUpdatable(hostContext) {
   );
   assert.equal(fake.progressChannels.length, 0, "the first announcement is not the channel");
 
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(
     fake.progressChannels.length,
     1,
@@ -230,7 +230,7 @@ async function runUpdatable(hostContext) {
   // message (a progress channel has no buttons), so it announces rather than refreshing.
   statusCause = "auth";
   authFieldState = "reauth_required";
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(
     notifications.length,
     announced + 2,
@@ -249,7 +249,7 @@ async function runUpdatable(hostContext) {
 
   serviceState = "active";
   statusCause = "none";
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(fake.progressChannels.length, 1, "an identical status opens no second channel");
   assert.ok(
     fake.progressChannels[0].reports.length >= 2,
@@ -260,31 +260,31 @@ async function runUpdatable(hostContext) {
   statusCause = "none";
   authFieldState = "valid";
   statusDetail = "tunnel en place";
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   await channel.settled;
   assert.equal(channel.running, false, "recovery closes the status channel");
   assert.equal(fake.progressChannels.length, 1, "recovery must not open another one");
   fakeVscode.window.state.focused = false;
   serviceState = "inactive";
   const beforeUnfocused = notifications.length;
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(notifications.length, beforeUnfocused,
     "an unfocused window leaves mirrored failure presentation to the OS");
   fakeVscode.window.state.focused = true;
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(notifications.length, beforeUnfocused + 1,
     "a focused acknowledged owner can announce the pending failure");
   acknowledgePresentation = false;
   serviceState = "active";
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   serviceState = "inactive";
   const beforeLegacy = notifications.length;
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(notifications.length, beforeLegacy,
     "an installation without ownership acknowledgment retains OS presentation");
   acknowledgePresentation = true;
   presentationLeaseSeconds = -1;
-  await registeredCommands.get("ai4devMonitor.showStatus")();
+  await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
   assert.equal(notifications.length, beforeLegacy,
     "an expired acknowledgment never grants IDE ownership");
   presentationLeaseSeconds = 150;
@@ -304,9 +304,9 @@ async function verifySettingsMigration() {
   const targets = { Global: 1, Workspace: 2, WorkspaceFolder: 3 };
   const folder = { toString: () => "file:///synthetic/project" };
   const values = new Map([
-    ["1||ai4devTunnel.installPath", "/explicit/unchanged"],
-    ["2||ai4devTunnel.logLines", 73],
-    ["3|file:///synthetic/project|ai4devTunnel.refreshIntervalSeconds", 11],
+    ["1||ai4devMonitor.installPath", "/explicit/unchanged"],
+    ["2||ai4devMonitor.logLines", 73],
+    ["3|file:///synthetic/project|ai4devMonitor.refreshIntervalSeconds", 11],
   ]);
   let rejectWrites = false;
   let ignoreWrites = false;
@@ -339,50 +339,50 @@ async function verifySettingsMigration() {
     get(key) { return backups.get(key); },
   };
   assert.equal(monitorConfiguration(workspace).get("installPath"), "/explicit/unchanged");
-  values.set("1||ai4devMonitor.refreshIntervalSeconds", 99);
+  values.set("1||ai4devGcloudMonitor.refreshIntervalSeconds", 99);
   assert.equal(monitorConfiguration(workspace, folder).get("refreshIntervalSeconds"), 11,
     "legacy folder value must retain precedence over a canonical user value");
   const result = await migrateMonitorSettings(workspace, storage, targets);
   assert.equal(result.migrated, 3);
   assert.equal(backups.size, 1);
-  assert.equal(values.get("1||ai4devMonitor.installPath"), "/explicit/unchanged");
-  assert.equal(values.get("2||ai4devMonitor.logLines"), 73);
-  assert.equal(values.get("3|file:///synthetic/project|ai4devMonitor.refreshIntervalSeconds"), 11);
-  assert.ok([...values.keys()].every((key) => !key.includes("ai4devTunnel.")));
+  assert.equal(values.get("1||ai4devGcloudMonitor.installPath"), "/explicit/unchanged");
+  assert.equal(values.get("2||ai4devGcloudMonitor.logLines"), 73);
+  assert.equal(values.get("3|file:///synthetic/project|ai4devGcloudMonitor.refreshIntervalSeconds"), 11);
+  assert.ok([...values.keys()].every((key) => !key.includes("ai4devMonitor.")));
   assert.equal((await migrateMonitorSettings(workspace, storage, targets)).migrated, 0);
   assert.equal(backups.size, 1);
-  values.set("1||ai4devTunnel.installPath", "/conflicting/source");
+  values.set("1||ai4devMonitor.installPath", "/conflicting/source");
   const before = [...values];
   await assert.rejects(migrateMonitorSettings(workspace, storage, targets), /CONFLICT/);
   assert.deepEqual([...values], before);
   assert.equal(backups.size, 1);
-  values.set("1||ai4devTunnel.installPath", "/explicit/unchanged");
+  values.set("1||ai4devMonitor.installPath", "/explicit/unchanged");
   await assert.rejects(
     migrateMonitorSettings(workspace, { update: async () => {}, get: () => undefined }, targets),
     /BACKUP_READBACK/
   );
-  assert.deepEqual([...values], [...before.filter(([key]) => !key.includes("ai4devTunnel.")),
-    ["1||ai4devTunnel.installPath", "/explicit/unchanged"]]);
+  assert.deepEqual([...values], [...before.filter(([key]) => !key.includes("ai4devMonitor.")),
+    ["1||ai4devMonitor.installPath", "/explicit/unchanged"]]);
   rejectWrites = true;
   await assert.rejects(migrateMonitorSettings(workspace, storage, targets), /WRITE_FAILED/);
-  assert.equal(values.get("1||ai4devTunnel.installPath"), "/explicit/unchanged");
+  assert.equal(values.get("1||ai4devMonitor.installPath"), "/explicit/unchanged");
   assert.equal(backups.size, 2);
   rejectWrites = false;
   ignoreWrites = true;
-  values.set("1||ai4devTunnel.wslDistro", "fixture-distro");
+  values.set("1||ai4devMonitor.wslDistro", "fixture-distro");
   await assert.rejects(migrateMonitorSettings(workspace, storage, targets),
     /DESTINATION_READBACK/);
-  assert.equal(values.get("1||ai4devTunnel.wslDistro"), "fixture-distro");
-  assert.equal(values.get("1||ai4devTunnel.installPath"), "/explicit/unchanged");
+  assert.equal(values.get("1||ai4devMonitor.wslDistro"), "fixture-distro");
+  assert.equal(values.get("1||ai4devMonitor.installPath"), "/explicit/unchanged");
   ignoreWrites = false;
   await assert.rejects(migrateMonitorSettings(workspace, {
     ...storage,
     async update(key, value) {
       await storage.update(key, value);
-      values.set("1||ai4devTunnel.wslDistro", "concurrent-change");
+      values.set("1||ai4devMonitor.wslDistro", "concurrent-change");
     },
   }, targets), /CHANGED/);
-  assert.equal(values.get("1||ai4devTunnel.wslDistro"), "concurrent-change");
+  assert.equal(values.get("1||ai4devMonitor.wslDistro"), "concurrent-change");
   const backupsBeforeLanguageRefusal = backups.size;
   languageOverride = true;
   await assert.rejects(migrateMonitorSettings(workspace, storage, targets), /LANGUAGE_OVERRIDE/);
@@ -409,24 +409,25 @@ async function run() {
     const explicitInstallPath = settings.installPath;
     delete settings.installPath;
     activate(context);
-    await registeredCommands.get("ai4devMonitor.showStatus")();
-    assert.ok(processInvocations.some(({ args }) => args.includes("~/agents/ai4dev")),
-      "unset installPath must dispatch to the canonical current product root");
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
+    const defaultInstallPath = "~/repositories/nicolas/ai4dev/ai4dev-gcloud/ai4dev-gcloud-cli";
+    assert.ok(processInvocations.some(({ args }) => args.includes(defaultInstallPath)),
+      "unset installPath must dispatch to the canonical future product root");
     assert.equal(
-      require("../package.json").contributes.configuration.properties["ai4devMonitor.installPath"].default,
-      "~/agents/ai4dev"
+      require("../package.json").contributes.configuration.properties["ai4devGcloudMonitor.installPath"].default,
+      defaultInstallPath
     );
     settings.installPath = explicitInstallPath;
     await fake.configurationChangeHandler({
-      affectsConfiguration: (key) => key === "ai4devMonitor" ||
-        key === "ai4devMonitor.installPath",
+      affectsConfiguration: (key) => key === "ai4devGcloudMonitor" ||
+        key === "ai4devGcloudMonitor.installPath",
     });
-    await registeredCommands.get("ai4devMonitor.showStatus")();
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
     assert.ok(processInvocations.at(-1).args.includes(explicitInstallPath),
       "an explicit installation path must not be silently migrated");
 
     assert.equal(statusItems.length, 2);
-    assert.match(statusItems[0].text, /ai4dev : arrêté/, outputChannels[0].content);
+    assert.match(statusItems[0].text, /ai4dev-gcloud : arrêté/, outputChannels[0].content);
     assert.equal(statusItems[0].color.id, "editorWarning.foreground");
     assert.match(statusItems[0].tooltip, /Horaires documentés du service.*lundi 00:00/);
     assert.match(statusItems[0].tooltip, /Préremplissage de la commande d’authentification : Activé/);
@@ -434,11 +435,11 @@ async function run() {
     assert.match(notifications[0].message, /ne fonctionne pas/);
     assert.equal(notifications[0].actions.length, 3);
 
-    await registeredCommands.get("ai4devMonitor.toggle")();
+    await registeredCommands.get("ai4devGcloudMonitor.toggle")();
     assert.equal(notifications.length, 1);
 
     fake.selectedAction = "showLogs";
-    await registeredCommands.get("ai4devMonitor.showActions")();
+    await registeredCommands.get("ai4devGcloudMonitor.showActions")();
     assert.equal(outputChannels[0].visible, true);
     assert.match(outputChannels[0].content, /sample tunnel log/);
     const logsInvocation = processInvocations.find(({ args }) => args.at(-3) === "logs");
@@ -447,8 +448,8 @@ async function run() {
     settings.authenticationPromptPrefill = "invalid";
     await fake.configurationChangeHandler({
       affectsConfiguration: (section) =>
-        section === "ai4devMonitor" ||
-        section === "ai4devMonitor.authenticationPromptPrefill",
+        section === "ai4devGcloudMonitor" ||
+        section === "ai4devGcloudMonitor.authenticationPromptPrefill",
     });
     assert.match(notifications.at(-1).message, /doit être une valeur booléenne/);
     assert.doesNotMatch(notifications.at(-1).message, /entier positif/);
@@ -456,8 +457,8 @@ async function run() {
     settings.authenticationPromptPrefill = false;
     await fake.configurationChangeHandler({
       affectsConfiguration: (section) =>
-        section === "ai4devMonitor" ||
-        section === "ai4devMonitor.authenticationPromptPrefill",
+        section === "ai4devGcloudMonitor" ||
+        section === "ai4devGcloudMonitor.authenticationPromptPrefill",
     });
     const prefillInvocation = processInvocations.findLast(
       ({ args }) => args.at(-3) === "prefill-set"
@@ -466,7 +467,7 @@ async function run() {
     assert.match(statusItems[0].tooltip, /Préremplissage de la commande d’authentification : Désactivé/);
 
     fake.selectedAction = "renewAuthentication";
-    await registeredCommands.get("ai4devMonitor.showActions")();
+    await registeredCommands.get("ai4devGcloudMonitor.showActions")();
     assert.equal(terminals.length, 1);
     assert.equal(terminals[0].shown, true);
     assert.match(terminals[0].options.name, /Renouveler/);
@@ -479,7 +480,7 @@ async function run() {
 
     // Coherence: the tunnel first recovers, which clears the failure flag.
     serviceState = "active";
-    await registeredCommands.get("ai4devMonitor.showStatus")();
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
     const errorCountBeforeUnreachable = notifications.length;
     const infoCountBeforeUnreachable = infoMessages.length;
 
@@ -487,22 +488,22 @@ async function run() {
     // sticky error toast; two consecutive failures do, with wording that
     // the check itself failed, and the recovery is then announced once.
     failStatusProbe = true;
-    await registeredCommands.get("ai4devMonitor.showStatus")();
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
     assert.equal(notifications.length, errorCountBeforeUnreachable);
-    assert.match(statusItems[0].text, /ai4dev : indisponible/);
-    await registeredCommands.get("ai4devMonitor.showStatus")();
+    assert.match(statusItems[0].text, /ai4dev-gcloud : indisponible/);
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
     assert.equal(notifications.length, errorCountBeforeUnreachable + 1);
     assert.match(notifications.at(-1).message, /Impossible de vérifier/);
 
     failStatusProbe = false;
-    await registeredCommands.get("ai4devMonitor.showStatus")();
-    assert.match(statusItems[0].text, /ai4dev : connecté/);
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
+    assert.match(statusItems[0].text, /ai4dev-gcloud : connecté/);
     const recoveryToasts = () =>
       infoMessages
         .slice(infoCountBeforeUnreachable)
         .filter((message) => /de nouveau connecté/.test(message)).length;
     assert.equal(recoveryToasts(), 1);
-    await registeredCommands.get("ai4devMonitor.showStatus")();
+    await registeredCommands.get("ai4devGcloudMonitor.showStatus")();
     assert.equal(recoveryToasts(), 1);
 
     await runUpdatable(context);

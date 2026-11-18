@@ -10,7 +10,7 @@ const {
 } = require("../src/status");
 
 assert.deepEqual(
-  parseStatusOutput("diagnostic\nAI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\n"),
+  parseStatusOutput("diagnostic\nAI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\n"),
   {
     supervisor: "systemd",
     serviceState: "active",
@@ -23,7 +23,7 @@ assert.deepEqual(
   }
 );
 const configuredStatus = parseStatusOutput(
-  "AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris"
+  "AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris"
 );
 assert.deepEqual(configuredStatus.serviceWindow, {
   startDay: 1,
@@ -39,31 +39,31 @@ assert.equal(
 );
 assert.equal(
   parseStatusOutput(
-    "AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\ttrue"
+    "AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\ttrue"
   ).authenticationPrefillEnabled,
   true
 );
 assert.equal(
   parseStatusOutput(
-    "AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\tfalse"
+    "AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\tfalse"
   ).authenticationPrefillEnabled,
   false
 );
 assert.equal(
   parseStatusOutput(
-    "AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\tunsupported"
+    "AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\tunsupported"
   ).authenticationPrefillEnabled,
   null
 );
 assert.throws(
   () =>
     parseStatusOutput(
-      "AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\tunknown"
+      "AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\tunknown"
     ),
   /prefill status/
 );
 assert.deepEqual(
-  parseStatusOutput("AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t25:00\t6\t00:00\tEurope/Paris")
+  parseStatusOutput("AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t25:00\t6\t00:00\tEurope/Paris")
     .serviceWindow,
   { invalid: true }
 );
@@ -74,7 +74,7 @@ assert.equal(classifyStatus("active", false), "degraded");
 assert.equal(classifyStatus("inactive", true), "degraded");
 assert.throws(() => parseStatusOutput("no status"), /Missing/);
 assert.throws(
-  () => parseStatusOutput("AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t99999\t1"),
+  () => parseStatusOutput("AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t99999\t1"),
   /Invalid/
 );
 
@@ -99,7 +99,7 @@ console.log("ai4dev_tunnel_status_test: PASS");
 
 // An eleventh field carries the credential state of the stored credential.
 const credentialRecord =
-  "AI4DEV_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\ttrue\trenewable";
+  "AI4DEV_GCLOUD_TUNNEL_STATUS\tsystemd\tactive\t8443\t1\t1\t00:00\t6\t00:00\tEurope/Paris\ttrue\trenewable";
 assert.equal(parseStatusOutput(credentialRecord).authenticationState, "renewable");
 assert.equal(parseStatusOutput(credentialRecord).state, "connected");
 assert.equal(configuredStatus.authenticationState, null);

@@ -4,7 +4,7 @@
 
 - Select the main status item to connect a stopped tunnel or disconnect a connected tunnel.
 - Select the ellipsis to open the action list.
-- Search the Command Palette for `AI4Dev Monitor` to open the same action list.
+- Search the Command Palette for `AI4Dev Gcloud Monitor` to open the same action list.
 - Hover over the main item for the current state, supervisor, local port, and last-check time.
 
 ## Failure notification
@@ -13,11 +13,11 @@ An unhealthy tunnel state triggers one VS Code notification per failure episode,
 
 ## Settings
 
-- `ai4devMonitor.installPath` points to the Linux installation containing `bashrc/ai4dev.bashrc`.
-- `ai4devMonitor.wslDistro` selects a WSL distribution. Leave it empty to derive the distribution from the current WSL workspace or use the WSL default.
-- `ai4devMonitor.refreshIntervalSeconds` controls the polling interval.
+- `ai4devGcloudMonitor.installPath` points to the Linux installation containing `bashrc/ai4dev-gcloud.bashrc`.
+- `ai4devGcloudMonitor.wslDistro` selects a WSL distribution. Leave it empty to derive the distribution from the current WSL workspace or use the WSL default.
+- `ai4devGcloudMonitor.refreshIntervalSeconds` controls the polling interval.
 
-Run `AI4Dev Monitor: Migrate legacy settings` explicitly to move the six legacy `ai4devTunnel` settings to `ai4devMonitor` without changing values or scopes. A verified private backup precedes writes; conflicts fail visibly without overwriting the destination. Legacy settings remain readable until migration. Installation paths are never rewritten automatically.
+Run `AI4Dev Gcloud Monitor: Migrate legacy settings` explicitly to move the six legacy `ai4devMonitor` settings to `ai4devGcloudMonitor` without changing values or scopes. A verified private backup precedes writes; conflicts fail visibly without overwriting the destination. Legacy settings remain readable until migration. Installation paths are never rewritten automatically.
 
 ## Language and themes
 

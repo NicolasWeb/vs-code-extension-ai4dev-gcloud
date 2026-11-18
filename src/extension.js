@@ -11,8 +11,8 @@ const {
 } = require("./status");
 const { createTunnelClient, resolveDistro } = require("./tunnelClient");
 
-const NOTIFICATION_KEY = "ai4devMonitor.failureNotified";
-const LEGACY_MONITOR_SECTION = "ai4devTunnel";
+const NOTIFICATION_KEY = "ai4devGcloudMonitor.failureNotified";
+const LEGACY_MONITOR_SECTION = "ai4devMonitor";
 const MONITOR_SETTINGS = [
   "installPath", "authenticationPromptPrefill", "wslDistro",
   "refreshIntervalSeconds", "commandTimeoutSeconds", "logLines",
@@ -20,7 +20,7 @@ const MONITOR_SETTINGS = [
 const sameValue = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
 function monitorConfiguration(workspace, resource) {
-  const current = workspace.getConfiguration("ai4devMonitor", resource);
+  const current = workspace.getConfiguration("ai4devGcloudMonitor", resource);
   const legacy = workspace.getConfiguration(LEGACY_MONITOR_SECTION, resource);
   return {
     get(key, fallback) {
@@ -49,7 +49,7 @@ async function migrateMonitorSettings(workspace, storage, targets) {
   const records = [];
   for (const scope of scopes) {
     const source = workspace.getConfiguration(LEGACY_MONITOR_SECTION, scope.resource);
-    const destination = workspace.getConfiguration("ai4devMonitor", scope.resource);
+    const destination = workspace.getConfiguration("ai4devGcloudMonitor", scope.resource);
     for (const key of MONITOR_SETTINGS) {
       const observed = source.inspect(key) || {};
       if (["globalLanguageValue", "workspaceLanguageValue", "workspaceFolderLanguageValue"]
@@ -66,7 +66,7 @@ async function migrateMonitorSettings(workspace, storage, targets) {
     }
   }
   if (!records.length) return { migrated: 0 };
-  const backupKey = `ai4devMonitor.settingsBackup.${Date.now()}.${randomBytes(8).toString("hex")}`;
+  const backupKey = `ai4devGcloudMonitor.settingsBackup.${Date.now()}.${randomBytes(8).toString("hex")}`;
   const backup = records.map(({ scope, key, value, existing }) => ({
     target: scope.target, resource: scope.resource ? scope.resource.toString() : null,
     key, value, existing,
@@ -114,7 +114,7 @@ const PROBLEM_STATES = ["stopped", "degraded", "down", "unavailable", "auth_requ
 let releasePresentation;
 
 function activate(context) {
-  const output = vscode.window.createOutputChannel("AI4Dev Monitor");
+  const output = vscode.window.createOutputChannel("AI4Dev Gcloud Monitor");
   const locale = detectLocale(
     vscode.env.language,
     operatingSystemLocales(process.platform, process.env)
@@ -142,7 +142,7 @@ function activate(context) {
   const focused = () => Boolean(vscode.window.state && vscode.window.state.focused);
   const recordPresentation = (stdout) => {
     const match = String(stdout || "").match(new RegExp(
-      `^AI4DEV_PRESENTATION_OWNER id=${presentationId} expires=([1-9][0-9]{0,11})\\r?$`, "m"
+      `^AI4DEV_GCLOUD_PRESENTATION_OWNER id=${presentationId} expires=([1-9][0-9]{0,11})\\r?$`, "m"
     ));
     presentationExpiresAt = match ? Number(match[1]) * 1000 : 0;
     presentationOwner = focused() && presentationExpiresAt > Date.now() &&
@@ -150,22 +150,22 @@ function activate(context) {
   };
 
   const statusItem = vscode.window.createStatusBarItem(
-    "ai4devMonitor.status",
+    "ai4devGcloudMonitor.status",
     vscode.StatusBarAlignment.Right,
     90
   );
-  statusItem.name = "AI4Dev Monitor";
-  statusItem.command = "ai4devMonitor.toggle";
+  statusItem.name = "AI4Dev Gcloud Monitor";
+  statusItem.command = "ai4devGcloudMonitor.toggle";
 
   const actionsItem = vscode.window.createStatusBarItem(
-    "ai4devMonitor.actions",
+    "ai4devGcloudMonitor.actions",
     vscode.StatusBarAlignment.Right,
     89
   );
-  actionsItem.name = "AI4Dev Monitor actions";
+  actionsItem.name = "AI4Dev Gcloud Monitor actions";
   actionsItem.text = "$(ellipsis)";
   actionsItem.tooltip = text("actions.openMenu");
-  actionsItem.command = "ai4devMonitor.showActions";
+  actionsItem.command = "ai4devGcloudMonitor.showActions";
 
   function makeClient() {
     const configuration = monitorConfiguration(vscode.workspace);
@@ -181,7 +181,7 @@ function activate(context) {
       platform: process.platform,
       remoteName: vscode.env.remoteName,
       distro,
-      installPath: configuration.get("installPath", "~/agents/ai4dev"),
+      installPath: configuration.get("installPath", "~/repositories/nicolas/ai4dev/ai4dev-gcloud/ai4dev-gcloud-cli"),
       authenticationPromptPrefill: configuration.get("authenticationPromptPrefill", true),
       timeoutSeconds: configuration.get("commandTimeoutSeconds", 60),
       logLines: configuration.get("logLines", 50),
@@ -308,7 +308,7 @@ function activate(context) {
       if (statusNotification) {
         statusNotification.update({ message, buttons });
       } else {
-        statusNotification = new vscode.Notification(message, { title: "ai4dev", buttons });
+        statusNotification = new vscode.Notification(message, { title: "ai4dev-gcloud", buttons });
         statusNotification.onDidDismiss(() => {
           statusNotification = undefined;
         });
@@ -349,7 +349,7 @@ function activate(context) {
     const running = vscode.window.withProgress(
       {
         location: location,
-        title: "ai4dev",
+        title: "ai4dev-gcloud",
         cancellable: true,
       },
       (progress, token) => {
@@ -607,7 +607,7 @@ function activate(context) {
 
   async function performAction(action) {
     if (action === "openSettings") {
-      await vscode.commands.executeCommand("workbench.action.openSettings", "ai4devMonitor");
+      await vscode.commands.executeCommand("workbench.action.openSettings", "ai4devGcloudMonitor");
       return;
     }
     if (action === "renewAuthentication") {
@@ -704,9 +704,9 @@ function activate(context) {
         output.appendLine(text("output.notificationFailed", { reason: errorText(error) }));
       });
     }),
-    vscode.commands.registerCommand("ai4devMonitor.toggle", toggleTunnel),
-    vscode.commands.registerCommand("ai4devMonitor.showActions", showActions),
-    vscode.commands.registerCommand("ai4devMonitor.migrateSettings", async () => {
+    vscode.commands.registerCommand("ai4devGcloudMonitor.toggle", toggleTunnel),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.showActions", showActions),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.migrateSettings", async () => {
       try {
         const result = await migrateMonitorSettings(
           vscode.workspace, context.globalState, vscode.ConfigurationTarget
@@ -721,26 +721,26 @@ function activate(context) {
         return { status: "failed", reason };
       }
     }),
-    vscode.commands.registerCommand("ai4devMonitor.connect", () => performAction("connect")),
-    vscode.commands.registerCommand("ai4devMonitor.disconnect", () => performAction("disconnect")),
-    vscode.commands.registerCommand("ai4devMonitor.restart", () => performAction("restart")),
-    vscode.commands.registerCommand("ai4devMonitor.showLogs", () => performAction("showLogs")),
-    vscode.commands.registerCommand("ai4devMonitor.renewAuthentication", () =>
+    vscode.commands.registerCommand("ai4devGcloudMonitor.connect", () => performAction("connect")),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.disconnect", () => performAction("disconnect")),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.restart", () => performAction("restart")),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.showLogs", () => performAction("showLogs")),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.renewAuthentication", () =>
       performAction("renewAuthentication")
     ),
-    vscode.commands.registerCommand("ai4devMonitor.showStatus", () => performAction("showStatus")),
-    vscode.commands.registerCommand("ai4devMonitor.openSettings", () =>
+    vscode.commands.registerCommand("ai4devGcloudMonitor.showStatus", () => performAction("showStatus")),
+    vscode.commands.registerCommand("ai4devGcloudMonitor.openSettings", () =>
       performAction("openSettings")
     ),
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("ai4devMonitor") ||
+      if (event.affectsConfiguration("ai4devGcloudMonitor") ||
         event.affectsConfiguration(LEGACY_MONITOR_SECTION)) {
         makeClient();
-        if (event.affectsConfiguration("ai4devMonitor.refreshIntervalSeconds") ||
+        if (event.affectsConfiguration("ai4devGcloudMonitor.refreshIntervalSeconds") ||
           event.affectsConfiguration(`${LEGACY_MONITOR_SECTION}.refreshIntervalSeconds`)) {
           scheduleRefresh();
         }
-        if (event.affectsConfiguration("ai4devMonitor.authenticationPromptPrefill") ||
+        if (event.affectsConfiguration("ai4devGcloudMonitor.authenticationPromptPrefill") ||
           event.affectsConfiguration(`${LEGACY_MONITOR_SECTION}.authenticationPromptPrefill`)) {
           await applyAuthenticationPrefill();
         } else {

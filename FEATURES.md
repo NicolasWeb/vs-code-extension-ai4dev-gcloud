@@ -1,6 +1,6 @@
 # Features
 
-- Status-bar state for the existing ai4dev tunnel, including supervisor, local port, and last-check time.
+- Status-bar state for the existing ai4dev-gcloud tunnel, including supervisor, local port, and last-check time.
 - Left-click connect/disconnect and a compact action menu for restart, logs, authentication renewal, status, and settings.
 - Theme-aware status colors and monochrome Codicons.
 - One VS Code failure notification per unhealthy episode, with retry, authentication-renewal, and log actions.

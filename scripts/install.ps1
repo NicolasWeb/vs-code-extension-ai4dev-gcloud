@@ -1,9 +1,9 @@
-# Identity renames (2026-11-04, 2026-11-05): this package publishes nitronicolasoft.ai4dev-monitor,
-# the current identity of the extension formerly published as nitronicolasoft.a4d-watcher and,
-# before that, nicolas-web-local.ai4dev-tunnel. A renamed identity is a different extension id,
+# This package publishes nitronicolasoft.ai4dev-gcloud-monitor and replaces nitronicolasoft.ai4dev-monitor.
+# Earlier identities are nitronicolasoft.a4d-watcher and nicolas-web-local.ai4dev-tunnel.
+# A renamed identity is a different extension id,
 # and there is no in-place upgrade fallback: a machine that still holds an old copy would run two
 # extensions side by side, and the old one would receive no further updates. Precondition:
-# uninstall both former ids from the Windows profile and from every Remote WSL extension store
+# uninstall every former id from the Windows profile and from every Remote WSL extension store
 # before installing. This script checks that precondition below and refuses with
 # OLD_EXTENSION_INSTALLED while any of them is still listed.
 
@@ -135,7 +135,7 @@ $wslRegistryPath = "$wslExtensionsDir/extensions.json"
 
 # Renamed-identity precheck: former copies cannot be upgraded in place, so they have to be gone
 # before this install runs on any host.
-$legacyExtensionIds = @('nicolas-web-local.ai4dev-tunnel', 'nitronicolasoft.a4d-watcher')
+$legacyExtensionIds = @('nitronicolasoft.ai4dev-monitor', 'nitronicolasoft.a4d-watcher', 'nicolas-web-local.ai4dev-tunnel')
 $legacyHosts = @()
 
 $previousErrorActionPreference = $ErrorActionPreference
@@ -180,10 +180,10 @@ if ($legacyHosts.Count -gt 0) {
 $targetDescription = "Windows profile and Remote WSL distribution '$WslDistro'"
 if (-not $PSCmdlet.ShouldProcess($targetDescription, "Install $extensionId@$version")) {
     if ($WhatIfPreference) {
-        Write-Output "AI4DEV_TUNNEL_INSTALL_DRY_RUN id=$extensionId version=$version distro=$WslDistro servers=$($codeServers.Count)"
+        Write-Output "AI4DEV_GCLOUD_TUNNEL_INSTALL_DRY_RUN id=$extensionId version=$version distro=$WslDistro servers=$($codeServers.Count)"
     }
     else {
-        Write-Output 'AI4DEV_TUNNEL_INSTALL_SKIPPED'
+        Write-Output 'AI4DEV_GCLOUD_TUNNEL_INSTALL_SKIPPED'
     }
     return
 }
@@ -232,7 +232,7 @@ try {
     if ($exitCode -ne 0) {
         throw "Windows VS Code extension installation failed with exit code $exitCode."
     }
-    Write-Output "AI4DEV_TUNNEL_INSTALL_WINDOWS_OK id=$extensionId version=$version"
+    Write-Output "AI4DEV_GCLOUD_TUNNEL_INSTALL_WINDOWS_OK id=$extensionId version=$version"
 
     $previousErrorActionPreference = $ErrorActionPreference
     try {
@@ -256,7 +256,7 @@ try {
     }
     $windowsRegistryJson = Get-Content -LiteralPath $windowsRegistryPath -Raw
     Test-ExtensionRegistry -RegistryJson $windowsRegistryJson -HostLabel 'Windows' -ExpectedId $extensionId -ExpectedVersion $version
-    Write-Output "AI4DEV_TUNNEL_INSTALL_WINDOWS_VERIFIED id=$extensionId version=$version"
+    Write-Output "AI4DEV_GCLOUD_TUNNEL_INSTALL_WINDOWS_VERIFIED id=$extensionId version=$version"
 
     foreach ($codeServer in $codeServers) {
         $previousErrorActionPreference = $ErrorActionPreference
@@ -298,9 +298,9 @@ try {
         }
         $registryJson = ($registryOutput -join "`n").Replace($nullCharacter, '')
         Test-ExtensionRegistry -RegistryJson $registryJson -HostLabel "Remote WSL ($WslDistro)" -ExpectedId $extensionId -ExpectedVersion $version
-        Write-Output "AI4DEV_TUNNEL_INSTALL_WSL_VERIFIED id=$extensionId version=$version server=$codeServer"
+        Write-Output "AI4DEV_GCLOUD_TUNNEL_INSTALL_WSL_VERIFIED id=$extensionId version=$version server=$codeServer"
     }
-    Write-Output "AI4DEV_TUNNEL_INSTALL_DONE id=$extensionId version=$version windows=1 wslServers=$($codeServers.Count)"
+    Write-Output "AI4DEV_GCLOUD_TUNNEL_INSTALL_DONE id=$extensionId version=$version windows=1 wslServers=$($codeServers.Count)"
 }
 finally {
     try {

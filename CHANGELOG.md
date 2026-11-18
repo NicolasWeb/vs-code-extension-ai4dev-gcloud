@@ -2,7 +2,7 @@
 
 ## 0.2.1
 
-- Use the `ai4devMonitor` command and configuration namespace while reading existing explicit legacy settings until the optional, backed-up migration is requested.
+- Use the `ai4devGcloudMonitor` command and configuration namespace while reading existing explicit legacy settings until the optional, backed-up migration is requested.
 - Route mirrored status notifications through one acknowledged focused editor window, with the system notification channel retaining ownership otherwise.
 - Run notification-button actions in the background and report combined action/status errors without opening terminals or changing authentication automatically.
 - Keep the package experimental with `preview` enabled.

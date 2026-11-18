@@ -1,7 +1,7 @@
 {
-  "name": "ai4dev-monitor",
-  "displayName": "AI4Dev Monitor",
-  "description": "Monitor and control the ai4dev tunnel from VS Code.",
+  "name": "ai4dev-gcloud-monitor",
+  "displayName": "AI4Dev Gcloud Monitor",
+  "description": "Monitor and control the ai4dev-gcloud tunnel from VS Code.",
   "version": "0.2.1",
   "publisher": "nitronicolasoft",
   "license": "SEE LICENSE IN LICENSE",
@@ -14,49 +14,49 @@
   "main": "./src/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:ai4devMonitor.showActions",
-    "onCommand:ai4devMonitor.migrateSettings"
+    "onCommand:ai4devGcloudMonitor.showActions",
+    "onCommand:ai4devGcloudMonitor.migrateSettings"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "ai4devMonitor.showActions",
-        "title": "AI4Dev Monitor",
+        "command": "ai4devGcloudMonitor.showActions",
+        "title": "AI4Dev Gcloud Monitor",
         "category": "AI4Dev"
       },
       {
-        "command": "ai4devMonitor.migrateSettings",
+        "command": "ai4devGcloudMonitor.migrateSettings",
         "title": "Migrate legacy settings",
-        "category": "AI4Dev Monitor"
+        "category": "AI4Dev Gcloud Monitor"
       }
     ],
     "configuration": {
-      "title": "AI4Dev Monitor",
+      "title": "AI4Dev Gcloud Monitor",
       "properties": {
-        "ai4devMonitor.installPath": {
+        "ai4devGcloudMonitor.installPath": {
           "type": "string",
-          "default": "~/agents/ai4dev"
+          "default": "~/repositories/nicolas/ai4dev/ai4dev-gcloud/ai4dev-gcloud-cli"
         },
-        "ai4devMonitor.authenticationPromptPrefill": {
+        "ai4devGcloudMonitor.authenticationPromptPrefill": {
           "type": "boolean",
           "default": true,
           "description": "Whether to enable authentication-renewal command prefill in the next interactive shell prompt."
         },
-        "ai4devMonitor.wslDistro": {
+        "ai4devGcloudMonitor.wslDistro": {
           "type": "string",
           "default": ""
         },
-        "ai4devMonitor.refreshIntervalSeconds": {
+        "ai4devGcloudMonitor.refreshIntervalSeconds": {
           "type": "number",
           "default": 5,
           "minimum": 1
         },
-        "ai4devMonitor.commandTimeoutSeconds": {
+        "ai4devGcloudMonitor.commandTimeoutSeconds": {
           "type": "number",
           "default": 60,
           "minimum": 1
         },
-        "ai4devMonitor.logLines": {
+        "ai4devGcloudMonitor.logLines": {
           "type": "number",
           "default": 50,
           "minimum": 1
@@ -68,14 +68,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/NicolasWeb/ai-agents-md.git",
-    "directory": "vs-code-extensions/home-made/ai4dev-monitor"
+    "directory": "vs-code-extensions/home-made/ai4dev-gcloud-monitor"
   },
   "bugs": {
     "url": "https://github.com/NicolasWeb/ai-agents-md/issues"
   },
   "homepage": "https://github.com/NicolasWeb/ai-agents-md/tree/main/vs-code-extensions/home-made/ai4dev-monitor",
   "keywords": [
-    "ai4dev",
+    "ai4dev-gcloud",
     "tunnel",
     "vscode",
     "wsl",
