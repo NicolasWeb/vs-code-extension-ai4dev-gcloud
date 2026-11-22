@@ -1,1 +1,5 @@
 * text=auto eol=lf
+
+# Windows script executables keep CRLF everywhere (user order 2026-11-22): cmd.exe parses batch files per line and expects CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
